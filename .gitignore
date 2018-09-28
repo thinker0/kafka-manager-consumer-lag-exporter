@@ -1,0 +1,8 @@
+
+.idea
+kafka-manager-consumer-lag-exporter
+target/
+go.sum
+config.json
+vendor/
+.vscode/
