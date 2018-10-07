@@ -9,7 +9,6 @@ import (
 	_ "log"
 	"net"
 	"net/http"
-	"os"
 	_ "regexp"
 	"strings"
 	"sync"
@@ -111,53 +110,57 @@ func main() {
 		if err != nil {
 			glog.Error("Error !!!%s \n ", err)
 			raven.CaptureErrorAndWait(err, nil)
-			os.Exit(1)
+			return
 		}
 		glog.Info("Startup !!!\n")
 		// TODO remove Mutex
 		// TODO Change to chanel
 		m := new(sync.Mutex)
+		wait := new(sync.WaitGroup)
+		wait.Add(len(clustersInfo.Clusters.Active))
+
 		for idx, cluster := range clustersInfo.Clusters.Active {
-			glog.Info("%d %s %+v\n", idx, cluster.Name, cluster)
+			go func(cluster Cluster) {
+				glog.Info("%d %s %+v\n", idx, cluster.Name, cluster)
+				defer wait.Done()
 
-			consumers := new(Consumers) // or &Foo{}
-			err = getJson(fmt.Sprintf(consumersURL, *kafkaManagerUrl, cluster.Name), consumers)
-			if err != nil {
-				glog.Infof("Error !!!%s \n ", err)
-				raven.CaptureErrorAndWait(err, nil)
-				os.Exit(1)
-			}
+				consumers := new(Consumers)
+				err = getJson(fmt.Sprintf(consumersURL, *kafkaManagerUrl, cluster.Name), consumers)
+				if err != nil {
+					glog.Infof("Error !!!%s \n ", err)
+					raven.CaptureErrorAndWait(err, nil)
+					return
+				}
+				wait.Add(len(consumers.Consumers))
 
-			var wait sync.WaitGroup
-			wait.Add(len(consumers.Consumers))
+				for _, consumer := range consumers.Consumers {
+					go func(w http.ResponseWriter, consumer Consumer) {
+						var buffer strings.Builder
 
-			for _, consumer := range consumers.Consumers {
-				go func(w http.ResponseWriter, consumer Consumer) {
-					var buffer strings.Builder
-
-					defer wait.Done()
-					if !strings.HasPrefix(consumer.Name, "console-") {
-						consumerSummary := new(map[string]ConsumerInfo)
-						err = getJson(fmt.Sprintf(consumerSummaryURL, *kafkaManagerUrl, cluster.Name, consumer.Name, consumer.Type), consumerSummary)
-						if err != nil {
-							glog.Errorf("Error !!!%s \n ", err)
-							raven.CaptureErrorAndWait(err, nil)
-						} else {
-							fmt.Fprintf(&buffer, "# HELP kafka_manager_total_lags %s %s Number of Consuemr Lag\n", cluster.Name, consumer.Name)
-							fmt.Fprintf(&buffer, "# TYPE kafka_manager_total_lags guage\n")
-							for consumerName, consumerInfo := range *consumerSummary {
-								fmt.Fprintf(&buffer, strings.Replace(`kafka_manager_total_lags{cluster="%s",topic="%s",consumer="%s"} %d\n`, `\n`, "\n", -1), cluster.Name, consumerName, consumer.Name, consumerInfo.TotalLag)
+						defer wait.Done()
+						if !strings.HasPrefix(consumer.Name, "console-") {
+							consumerSummary := new(map[string]ConsumerInfo)
+							err = getJson(fmt.Sprintf(consumerSummaryURL, *kafkaManagerUrl, cluster.Name, consumer.Name, consumer.Type), consumerSummary)
+							if err != nil {
+								glog.Errorf("Error !!!%s \n ", err)
+								raven.CaptureErrorAndWait(err, nil)
+							} else {
+								fmt.Fprintf(&buffer, "# HELP kafka_manager_total_lags %s %s Number of Consuemr Lag\n", cluster.Name, consumer.Name)
+								fmt.Fprintf(&buffer, "# TYPE kafka_manager_total_lags guage\n")
+								for consumerName, consumerInfo := range *consumerSummary {
+									fmt.Fprintf(&buffer, strings.Replace(`kafka_manager_total_lags{cluster="%s",topic="%s",consumer="%s"} %d\n`, `\n`, "\n", -1), cluster.Name, consumerName, consumer.Name, consumerInfo.TotalLag)
+								}
 							}
 						}
-					}
-					// TODO remove Mutex
-					m.Lock()
-					w.Write([]byte(buffer.String()))
-					m.Unlock()
-				}(w, consumer)
-			}
-			wait.Wait()
+						// TODO remove Mutex
+						m.Lock()
+						w.Write([]byte(buffer.String()))
+						m.Unlock()
+					}(w, consumer)
+				}
+			}(cluster)
 		}
+		wait.Wait()
 	})
 
 	glog.Info("starting kafka_manager_exporter on ", *httpPort)
