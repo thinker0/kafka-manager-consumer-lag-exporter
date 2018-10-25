@@ -146,7 +146,7 @@ func main() {
 								raven.CaptureErrorAndWait(err, nil)
 							} else {
 								fmt.Fprintf(&buffer, "# HELP kafka_manager_total_lags %s %s Number of Consuemr Lag\n", cluster.Name, consumer.Name)
-								fmt.Fprintf(&buffer, "# TYPE kafka_manager_total_lags guage\n")
+								fmt.Fprintf(&buffer, "# TYPE kafka_manager_total_lags gauge\n")
 								for consumerName, consumerInfo := range *consumerSummary {
 									fmt.Fprintf(&buffer, strings.Replace(`kafka_manager_total_lags{cluster="%s",topic="%s",consumer="%s"} %d\n`, `\n`, "\n", -1), cluster.Name, consumerName, consumer.Name, consumerInfo.TotalLag)
 								}
