@@ -6,7 +6,7 @@ This is an exporter for Prometheus to get instrumentation data for [KafkaManager
 
 ```bash
 go build .
-./kafka-manager-consumer-lag-exporter -http.port :8080 -kafka-manager http://localhost:9000
+./kafka-manager-consumer-lag-exporter -http.port :8080 -kafka-manager http://localhost:9000 -user user -pass pass
 ```
 
 
@@ -16,3 +16,7 @@ Name                            | Description
 --------------------------------|------------
 http.port                       | Address to listen on for web interface and telemetry.
 kafka-manager                   | [URL](#kafka-manager) to an KafkaManager.
+user                            | Username
+pass                            | Password
+alsologtostderr                 |
+logtostderr                     | Log to Stderr
