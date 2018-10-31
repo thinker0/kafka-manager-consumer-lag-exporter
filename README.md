@@ -20,3 +20,8 @@ user                            | Username
 pass                            | Password
 alsologtostderr                 |
 logtostderr                     | Log to Stderr
+
+
+# Example
+
+![Grafana](example/kafka-manager-consumer-lag-grafana.jpg)
